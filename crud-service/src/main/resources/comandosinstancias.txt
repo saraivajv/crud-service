@@ -1,0 +1,11 @@
+# Para rodar a primeira instância do crud-service
+mvn spring-boot:run -Dspring-boot.run.arguments="--server.port=8081"
+
+# Para rodar a segunda instância do crud-service
+mvn spring-boot:run -Dspring-boot.run.arguments="--server.port=8082"
+
+# Para rodar a primeira instância do db-service
+mvn spring-boot:run -Dspring-boot.run.arguments="--server.port=8091"
+
+# Para rodar a segunda instância do db-service
+mvn spring-boot:run -Dspring-boot.run.arguments="--server.port=8092"
