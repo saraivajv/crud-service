@@ -5,15 +5,17 @@ public class EmployeeDTO {
     private String name;
     private String position;
     private Double salary;
+    private String aiReview;
 
     // Construtores
     public EmployeeDTO() {}
 
-    public EmployeeDTO(Long id, String name, String position, Double salary) {
+    public EmployeeDTO(Long id, String name, String position, Double salary, String aiReview) {
         this.id = id;
         this.name = name;
         this.position = position;
         this.salary = salary;
+        this.aiReview = aiReview;
     }
 
     // Getters e Setters
@@ -48,5 +50,13 @@ public class EmployeeDTO {
 
     public void setSalary(Double salary) {
         this.salary = salary;
+    }
+
+    public String getAiReview() {
+        return aiReview;
+    }
+
+    public void setAiReview(String aiReview) {
+        this.aiReview = aiReview;
     }
 }

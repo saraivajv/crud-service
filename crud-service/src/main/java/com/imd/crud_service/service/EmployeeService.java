@@ -1,7 +1,9 @@
 package com.imd.crud_service.service;
 
+import com.imd.crud_service.client.AiServiceClient;
 import com.imd.crud_service.client.DbServiceClient;
 import com.imd.crud_service.dto.EmployeeDTO;
+import com.imd.crud_service.dto.ReviewDTO;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
@@ -11,9 +13,11 @@ import java.util.Optional;
 public class EmployeeService {
     
     private final DbServiceClient dbServiceClient;
+    private final AiServiceClient aiServiceClient;
 
-    public EmployeeService(DbServiceClient dbServiceClient) {
+    public EmployeeService(DbServiceClient dbServiceClient, AiServiceClient aiServiceClient) {
         this.dbServiceClient = dbServiceClient;
+        this.aiServiceClient = aiServiceClient;
     }
 
     // Criar um novo Employee
@@ -49,5 +53,10 @@ public class EmployeeService {
     // Deletar Employee
     public void deleteEmployee(Long id) {
         dbServiceClient.deleteEmployee(id);
+    }
+
+    public EmployeeDTO generateAndSaveReview(Long employeeId) {
+        ReviewDTO reviewResult = aiServiceClient.generateReview(employeeId);
+        return dbServiceClient.saveReview(employeeId, reviewResult);
     }
 }

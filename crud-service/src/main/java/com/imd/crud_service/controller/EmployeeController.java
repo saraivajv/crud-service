@@ -54,4 +54,10 @@ public class EmployeeController {
         employeeService.deleteEmployee(id);
         return ResponseEntity.noContent().build();
     }
+
+    @PostMapping("/{id}/generate-review")
+    public ResponseEntity<EmployeeDTO> generateEmployeeReview(@PathVariable Long id) {
+        EmployeeDTO employeeWithReview = employeeService.generateAndSaveReview(id);
+        return ResponseEntity.ok(employeeWithReview);
+    }
 }
