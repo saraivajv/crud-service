@@ -1,62 +1,75 @@
 package com.imd.crud_service.service;
 
-import com.imd.crud_service.client.AiServiceClient;
-import com.imd.crud_service.client.DbServiceClient;
 import com.imd.crud_service.dto.EmployeeDTO;
 import com.imd.crud_service.dto.ReviewDTO;
 import org.springframework.stereotype.Service;
-
-import java.util.List;
-import java.util.Optional;
+import org.springframework.web.reactive.function.client.WebClient;
+import reactor.core.publisher.Flux;
+import reactor.core.publisher.Mono;
 
 @Service
 public class EmployeeService {
-    
-    private final DbServiceClient dbServiceClient;
-    private final AiServiceClient aiServiceClient;
 
-    public EmployeeService(DbServiceClient dbServiceClient, AiServiceClient aiServiceClient) {
-        this.dbServiceClient = dbServiceClient;
-        this.aiServiceClient = aiServiceClient;
+    private final WebClient.Builder webClientBuilder;
+    private final String DB_SERVICE_URL = "http://db-service/db/employees";
+    private final String AI_SERVICE_URL = "http://ai-service/ai/reviews";
+
+    public EmployeeService(WebClient.Builder webClientBuilder) {
+        this.webClientBuilder = webClientBuilder;
     }
 
-    // Criar um novo Employee
-    public EmployeeDTO createEmployee(EmployeeDTO employee) {
-        return dbServiceClient.createEmployee(employee);
+    public Mono<EmployeeDTO> createEmployee(EmployeeDTO employee) {
+        return webClientBuilder.build().post()
+                .uri(DB_SERVICE_URL)
+                .bodyValue(employee)
+                .retrieve()
+                .bodyToMono(EmployeeDTO.class);
     }
 
-    // Obter todos os Employees
-    public List<EmployeeDTO> getAllEmployees() {
-        return dbServiceClient.getAllEmployees();
+    public Flux<EmployeeDTO> getAllEmployees() {
+        return webClientBuilder.build().get()
+                .uri(DB_SERVICE_URL)
+                .retrieve()
+                .bodyToFlux(EmployeeDTO.class);
     }
 
-    // Obter Employee por ID
-    public Optional<EmployeeDTO> getEmployeeById(Long id) {
-        try {
-            EmployeeDTO employee = dbServiceClient.getEmployeeById(id);
-            return Optional.ofNullable(employee);
-        } catch (Exception e) {
-            return Optional.empty();
-        }
+    public Mono<EmployeeDTO> getEmployeeById(Long id) {
+        return webClientBuilder.build().get()
+                .uri(DB_SERVICE_URL + "/{id}", id)
+                .retrieve()
+                .bodyToMono(EmployeeDTO.class);
     }
 
-    // Atualizar Employee
-    public Optional<EmployeeDTO> updateEmployee(Long id, EmployeeDTO employeeDetails) {
-        try {
-            EmployeeDTO updated = dbServiceClient.updateEmployee(id, employeeDetails);
-            return Optional.ofNullable(updated);
-        } catch (Exception e) {
-            return Optional.empty();
-        }
+    public Mono<EmployeeDTO> updateEmployee(Long id, EmployeeDTO employeeDetails) {
+        return webClientBuilder.build().put()
+                .uri(DB_SERVICE_URL + "/{id}", id)
+                .bodyValue(employeeDetails)
+                .retrieve()
+                .bodyToMono(EmployeeDTO.class);
     }
 
-    // Deletar Employee
-    public void deleteEmployee(Long id) {
-        dbServiceClient.deleteEmployee(id);
+    public Mono<Void> deleteEmployee(Long id) {
+        return webClientBuilder.build().delete()
+                .uri(DB_SERVICE_URL + "/{id}", id)
+                .retrieve()
+                .bodyToMono(Void.class);
     }
 
-    public EmployeeDTO generateAndSaveReview(Long employeeId) {
-        ReviewDTO reviewResult = aiServiceClient.generateReview(employeeId);
-        return dbServiceClient.saveReview(employeeId, reviewResult);
+    public Mono<EmployeeDTO> generateAndSaveReview(Long employeeId) {
+        // 1. Chamar ai-service para gerar a avaliação de forma não-blocante
+        Mono<ReviewDTO> reviewMono = webClientBuilder.build().post()
+                .uri(AI_SERVICE_URL + "/generate/{employeeId}", employeeId)
+                .retrieve()
+                .bodyToMono(ReviewDTO.class);
+
+        // 2. Usar flatMap para encadear a próxima chamada assíncrona: salvar no db-service
+        return reviewMono.flatMap(reviewDTO ->
+                webClientBuilder.build().post()
+                        .uri(DB_SERVICE_URL + "/{id}/review", employeeId)
+                        .bodyValue(reviewDTO)
+                        .retrieve()
+                        .bodyToMono(EmployeeDTO.class)
+        );
     }
 }
+
