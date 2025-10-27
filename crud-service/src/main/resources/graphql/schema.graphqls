@@ -1,0 +1,31 @@
+# Define a entidade principal
+type Employee {
+    id: ID
+    name: String
+    position: String
+    salary: Float
+    aiReview: String
+}
+
+# DTO para criação, já que o ID não é necessário
+input EmployeeInput {
+    name: String!
+    position: String!
+    salary: Float!
+}
+
+# Define as operações de consulta (leitura)
+type Query {
+    # Retorna todos os funcionários
+    employees: [Employee]
+
+    # Retorna um funcionário pelo ID
+    employeeById(id: ID!): Employee
+}
+
+# Define as operações de mutação (escrita)
+type Mutation {
+    createEmployee(input: EmployeeInput!): Employee
+
+    generateAndSaveReview(employeeId: ID!): Employee
+}
