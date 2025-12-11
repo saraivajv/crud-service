@@ -1,25 +1,63 @@
 package com.imd.crud_service.controller;
 
+import com.imd.common.events.EmployeeCreationRequested;
+import com.imd.common.events.ValidateSalaryCommand;
+import com.imd.crud_service.config.SagaConfig;
 import com.imd.crud_service.dto.EmployeeDTO;
 import com.imd.crud_service.service.EmployeeService;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
+
+import java.util.UUID;
 
 @RestController
 @RequestMapping("/employees")
 public class EmployeeController {
 
     private final EmployeeService employeeService;
+    private final SagaConfig sagaConfig; // Injeção para enviar eventos
 
-    public EmployeeController(EmployeeService employeeService) {
+    // Injeta o profile ativo para decidir a estratégia
+    @Value("${spring.profiles.active:}")
+    private String activeProfile;
+
+    public EmployeeController(EmployeeService employeeService, SagaConfig sagaConfig) {
         this.employeeService = employeeService;
+        this.sagaConfig = sagaConfig;
     }
 
+    // --- MUDANÇA PRINCIPAL AQUI ---
     @PostMapping
-    public Mono<EmployeeDTO> createEmployee(@RequestBody EmployeeDTO employee) {
-        return employeeService.createEmployee(employee);
+    public Mono<ResponseEntity<EmployeeDTO>> createEmployee(@RequestBody EmployeeDTO employee) {
+        // Geramos um ID de evento para rastreio
+        UUID sagaId = UUID.randomUUID();
+
+        // Verificamos qual estratégia usar baseada no profile
+        if (activeProfile.contains("choreography")) {
+            // Estratégia 1: Emitir Evento (Coreografia)
+            EmployeeCreationRequested event = new EmployeeCreationRequested(
+                    sagaId,
+                    employee.getName(),
+                    employee.getPosition(),
+                    employee.getSalary()
+            );
+            sagaConfig.send(event);
+
+        } else if (activeProfile.contains("orchestration")) {
+            // Estratégia 2: Emitir Comando (Orquestração)
+            ValidateSalaryCommand command = new ValidateSalaryCommand(
+                    sagaId,
+                    employee.getName(),
+                    employee.getPosition(),
+                    employee.getSalary()
+            );
+            sagaConfig.send(command);
+        }
+        employee.setAiReview("PROCESSANDO_SAGA_" + sagaId);
+        return Mono.just(ResponseEntity.accepted().body(employee));
     }
 
     @GetMapping
@@ -54,4 +92,3 @@ public class EmployeeController {
                 .defaultIfEmpty(ResponseEntity.notFound().build());
     }
 }
-
