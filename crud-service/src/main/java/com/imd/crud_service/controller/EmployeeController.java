@@ -18,9 +18,9 @@ import java.util.UUID;
 public class EmployeeController {
 
     private final EmployeeService employeeService;
-    private final SagaConfig sagaConfig; // Injeção para enviar eventos
+    private final SagaConfig sagaConfig;
 
-    // Injeta o profile ativo para decidir a estratégia
+    // Injeta o profile ativo
     @Value("${spring.profiles.active:}")
     private String activeProfile;
 
@@ -29,32 +29,37 @@ public class EmployeeController {
         this.sagaConfig = sagaConfig;
     }
 
-    // --- MUDANÇA PRINCIPAL AQUI ---
     @PostMapping
     public Mono<ResponseEntity<EmployeeDTO>> createEmployee(@RequestBody EmployeeDTO employee) {
-        // Geramos um ID de evento para rastreio
         UUID sagaId = UUID.randomUUID();
 
-        // Verificamos qual estratégia usar baseada no profile
+        // 1. VERIFICAÇÃO PARA COREOGRAFIA
         if (activeProfile.contains("choreography")) {
-            // Estratégia 1: Emitir Evento (Coreografia)
+            System.out.println("Controller: Iniciando fluxo COREOGRAFIA");
+
             EmployeeCreationRequested event = new EmployeeCreationRequested(
                     sagaId,
                     employee.getName(),
                     employee.getPosition(),
                     employee.getSalary()
             );
-            sagaConfig.send(event);
 
+            // CORREÇÃO: Chama o método específico 'sendEvent'
+            sagaConfig.sendEvent(event);
+
+            // 2. VERIFICAÇÃO PARA ORQUESTRAÇÃO
         } else if (activeProfile.contains("orchestration")) {
-            // Estratégia 2: Emitir Comando (Orquestração)
+            System.out.println("Controller: Iniciando fluxo ORQUESTRAÇÃO (Maestro)");
+
             ValidateSalaryCommand command = new ValidateSalaryCommand(
                     sagaId,
                     employee.getName(),
                     employee.getPosition(),
                     employee.getSalary()
             );
-            sagaConfig.send(command);
+
+            sagaConfig.sendCommand(command);
+
         }
         employee.setAiReview("PROCESSANDO_SAGA_" + sagaId);
         return Mono.just(ResponseEntity.accepted().body(employee));
