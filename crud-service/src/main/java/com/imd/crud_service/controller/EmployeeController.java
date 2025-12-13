@@ -4,6 +4,8 @@ import com.imd.common.events.EmployeeCreationRequested;
 import com.imd.common.events.ValidateSalaryCommand;
 import com.imd.crud_service.config.SagaConfig;
 import com.imd.crud_service.dto.EmployeeDTO;
+import com.imd.crud_service.model.Employee; // Importe a Entidade
+import com.imd.crud_service.repository.EmployeeRepository; // Importe o Repo
 import com.imd.crud_service.service.EmployeeService;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.ResponseEntity;
@@ -18,82 +20,83 @@ import java.util.UUID;
 public class EmployeeController {
 
     private final EmployeeService employeeService;
+    private final EmployeeRepository employeeRepository; // Injetamos o Repo direto para a Saga
     private final SagaConfig sagaConfig;
 
-    // Injeta o profile ativo
     @Value("${spring.profiles.active:}")
     private String activeProfile;
 
-    public EmployeeController(EmployeeService employeeService, SagaConfig sagaConfig) {
+    public EmployeeController(EmployeeService employeeService, EmployeeRepository employeeRepository, SagaConfig sagaConfig) {
         this.employeeService = employeeService;
+        this.employeeRepository = employeeRepository;
         this.sagaConfig = sagaConfig;
     }
 
+    // Mudei o retorno para <Employee> (Entidade) para o usuário ver o ID e o Status
     @PostMapping
-    public Mono<ResponseEntity<EmployeeDTO>> createEmployee(@RequestBody EmployeeDTO employee) {
+    public Mono<ResponseEntity<Employee>> createEmployee(@RequestBody EmployeeDTO dto) {
+        // 1. Gera UUID da Saga
         UUID sagaId = UUID.randomUUID();
 
-        // 1. VERIFICAÇÃO PARA COREOGRAFIA
-        if (activeProfile.contains("choreography")) {
-            System.out.println("Controller: Iniciando fluxo COREOGRAFIA");
+        // 2. Cria Entidade com Status PENDING (Usando os acessors do Record: dto.name())
+        Employee entity = new Employee(
+                sagaId,
+                dto.name(),      // Record usa .name(), não .getName()
+                dto.position(),  // Record usa .position()
+                dto.salary(),    // Record usa .salary()
+                "PENDING"
+        );
 
-            EmployeeCreationRequested event = new EmployeeCreationRequested(
-                    sagaId,
-                    employee.getName(),
-                    employee.getPosition(),
-                    employee.getSalary()
-            );
+        // 3. Salva no Banco -> DEPOIS envia evento
+        return employeeRepository.save(entity)
+                .flatMap(saved -> {
+                    // Lógica de envio (Coreografia vs Orquestração)
+                    if (activeProfile.contains("choreography")) {
+                        System.out.println("Controller: Iniciando fluxo COREOGRAFIA para ID: " + sagaId);
 
-            // CORREÇÃO: Chama o método específico 'sendEvent'
-            sagaConfig.sendEvent(event);
+                        EmployeeCreationRequested event = new EmployeeCreationRequested(
+                                sagaId,
+                                dto.name(),
+                                dto.position(),
+                                dto.salary()
+                        );
+                        sagaConfig.sendEvent(event);
 
-            // 2. VERIFICAÇÃO PARA ORQUESTRAÇÃO
-        } else if (activeProfile.contains("orchestration")) {
-            System.out.println("Controller: Iniciando fluxo ORQUESTRAÇÃO (Maestro)");
+                    } else if (activeProfile.contains("orchestration")) {
+                        System.out.println("Controller: Iniciando fluxo ORQUESTRAÇÃO para ID: " + sagaId);
 
-            ValidateSalaryCommand command = new ValidateSalaryCommand(
-                    sagaId,
-                    employee.getName(),
-                    employee.getPosition(),
-                    employee.getSalary()
-            );
+                        ValidateSalaryCommand command = new ValidateSalaryCommand(
+                                sagaId,
+                                dto.name(),
+                                dto.position(),
+                                dto.salary()
+                        );
+                        sagaConfig.sendCommand(command);
+                    }
 
-            sagaConfig.sendCommand(command);
-
-        }
-        employee.setAiReview("PROCESSANDO_SAGA_" + sagaId);
-        return Mono.just(ResponseEntity.accepted().body(employee));
+                    // Retorna o objeto salvo (com status PENDING) para o usuário
+                    return Mono.just(ResponseEntity.accepted().body(saved));
+                });
     }
 
     @GetMapping
-    public Flux<EmployeeDTO> getAllEmployees() {
-        return employeeService.getAllEmployees();
+    public Flux<Employee> getAllEmployees() {
+        // Ajuste seu service para retornar Flux<Employee> se necessário, ou chame o repo direto
+        return employeeRepository.findAll();
     }
 
+    // Mudei Long para UUID
     @GetMapping("/{id}")
-    public Mono<ResponseEntity<EmployeeDTO>> getEmployeeById(@PathVariable Long id) {
-        return employeeService.getEmployeeById(id)
+    public Mono<ResponseEntity<Employee>> getEmployeeById(@PathVariable UUID id) {
+        return employeeRepository.findById(id)
                 .map(ResponseEntity::ok)
                 .defaultIfEmpty(ResponseEntity.notFound().build());
     }
 
-    @PutMapping("/{id}")
-    public Mono<ResponseEntity<EmployeeDTO>> updateEmployee(@PathVariable Long id, @RequestBody EmployeeDTO employeeDetails) {
-        return employeeService.updateEmployee(id, employeeDetails)
-                .map(ResponseEntity::ok)
-                .defaultIfEmpty(ResponseEntity.notFound().build());
-    }
-
+    // Mudei Long para UUID e removi a lógica antiga
     @DeleteMapping("/{id}")
-    public Mono<ResponseEntity<Void>> deleteEmployee(@PathVariable Long id) {
-        return employeeService.deleteEmployee(id)
+    public Mono<ResponseEntity<Void>> deleteEmployee(@PathVariable UUID id) {
+        return employeeRepository.deleteById(id)
                 .then(Mono.just(ResponseEntity.noContent().<Void>build()));
-    }
-
-    @PostMapping("/{id}/generate-review")
-    public Mono<ResponseEntity<EmployeeDTO>> generateEmployeeReview(@PathVariable Long id) {
-        return employeeService.generateAndSaveReview(id)
-                .map(ResponseEntity::ok)
-                .defaultIfEmpty(ResponseEntity.notFound().build());
     }
 }

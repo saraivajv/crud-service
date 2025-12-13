@@ -34,3 +34,29 @@ services:
     ports:
       - "5672:5672"
       - "15672:15672"
+
+  postgres:
+    image: postgres:15-alpine
+    hostname: postgres
+    container_name: postgres
+    ports:
+      - "5433:5432"
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: db_service
+    # Opcional: Persistência de dados para não perder ao reiniciar o container
+    # volumes:
+    #   - postgres_data:/var/lib/postgresql/data
+
+  zipkin:
+    image: openzipkin/zipkin
+    hostname: zipkin
+    container_name: zipkin
+    ports:
+      - "9411:9411"
+    environment:
+      STORAGE_TYPE: mem # Armazena em memória (reseta ao reiniciar). Use 'elasticsearch' p/ produção.
+
+# volumes:
+#   postgres_data:
