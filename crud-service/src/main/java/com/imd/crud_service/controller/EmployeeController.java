@@ -1,12 +1,13 @@
 package com.imd.crud_service.controller;
 
 import com.imd.common.events.EmployeeCreationRequested;
-import com.imd.common.events.ValidateSalaryCommand;
+import com.imd.crud_service.config.CrudOrchestrationConfig;
 import com.imd.crud_service.config.SagaConfig;
 import com.imd.crud_service.dto.EmployeeDTO;
 import com.imd.crud_service.model.Employee; // Importe a Entidade
 import com.imd.crud_service.repository.EmployeeRepository; // Importe o Repo
 import com.imd.crud_service.service.EmployeeService;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -22,6 +23,9 @@ public class EmployeeController {
     private final EmployeeService employeeService;
     private final EmployeeRepository employeeRepository; // Injetamos o Repo direto para a Saga
     private final SagaConfig sagaConfig;
+
+    @Autowired(required = false)
+    private CrudOrchestrationConfig orchestrator;
 
     @Value("${spring.profiles.active:}")
     private String activeProfile;
@@ -65,16 +69,12 @@ public class EmployeeController {
                     } else if (activeProfile.contains("orchestration")) {
                         System.out.println("Controller: Iniciando fluxo ORQUESTRAÇÃO para ID: " + sagaId);
 
-                        ValidateSalaryCommand command = new ValidateSalaryCommand(
-                                sagaId,
-                                dto.name(),
-                                dto.position(),
-                                dto.salary()
-                        );
-                        sagaConfig.sendCommand(command);
+                        if (orchestrator != null) {
+                            orchestrator.startSaga(sagaId, dto);
+                        } else {
+                            System.err.println("ERRO CRÍTICO: Bean do Orquestrador não carregado!");
+                        }
                     }
-
-                    // Retorna o objeto salvo (com status PENDING) para o usuário
                     return Mono.just(ResponseEntity.accepted().body(saved));
                 });
     }
